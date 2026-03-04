@@ -1,0 +1,10 @@
+#include "stm32f4xx_hal.h"
+
+#define LIS3DSH_CS_PORT     GPIOE
+#define LIS3DSH_CS_PIN      GPIO_PIN_3
+#define LIS3DSH_SCK_PORT    GPIOA
+#define LIS3DSH_SCK_PIN     GPIO_PIN_5
+#define LIS3DSH_MISO_PORT   GPIOA
+#define LIS3DSH_MISO_PIN    GPIO_PIN_6
+#define LIS3DSH_MOSI_PORT   GPIOA
+#define LIS3DSH_MOSI_PIN    GPIO_PIN_7
