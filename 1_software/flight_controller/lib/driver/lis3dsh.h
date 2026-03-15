@@ -58,16 +58,14 @@
 #define LIS3DSH_SENSITIVITY_0_24G            0.24  /* 0.24 mg/digit*/
 #define LIS3DSH_SENSITIVITY_0_73G            0.73  /* 0.73 mg/digit*/
 
-//Typedefs
-//1. Accelerometer Configuration struct
 typedef struct 
 {
 	uint8_t dataRate;
 	uint8_t fullScale;
 	uint8_t antiAliasingBW;
 	uint8_t enableAxes;
-	bool interruptEnable;
-}LIS3DSH_InitTypeDef;
+	bool 	interruptEnable;
+}lis3dsh_config;
 
 //2. Accelerometer raw data
 typedef struct 
@@ -77,13 +75,12 @@ typedef struct
 	int16_t z;
 }LIS3DSH_DataRaw;
 
-//3. Accelerometer mg data (scaled data)
 typedef struct
 {
 	float x;
 	float y;
 	float z;
-}LIS3DSH_DataScaled;
+}lis3dsh_scaledData;
 
 //Functions prototypes
 //Private functions
@@ -93,14 +90,14 @@ void LIS3DSH_WriteIO(uint8_t reg, uint8_t *dataW, uint8_t size);
 void LIS3DSH_ReadIO(uint8_t reg, uint8_t *dataR, uint8_t size);
 
 
-//1. Accelerometer initialise function
-void LIS3DSH_Init(SPI_HandleTypeDef *accSPI, LIS3DSH_InitTypeDef *accInitDef);
+void lis3dsh_init(SPI_HandleTypeDef *accSPI, lis3dsh_config *accInitDef);
+bool lis3dsh_data_ready(uint32_t msTimeout);
+lis3dsh_scaledData lis3dsh_get_scaled_data(void);
+
 //2. Get Accelerometer raw data
 LIS3DSH_DataRaw LIS3DSH_GetDataRaw(void);
-//3. Get Accelerometer mg data
-LIS3DSH_DataScaled LIS3DSH_GetDataScaled(void);
-//4. Poll for Data Ready
-bool LIS3DSH_PollDRDY(uint32_t msTimeout);
+
+
 
 //** Calibration functions **//
 //1. Set X-Axis calibrate

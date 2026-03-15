@@ -55,9 +55,7 @@ void LIS3DSH_ReadIO(uint8_t reg, uint8_t *dataR, uint8_t size)
 	}
 }
 
-
-//1. Accelerometer initialise function
-void LIS3DSH_Init(SPI_HandleTypeDef *accSPI, LIS3DSH_InitTypeDef *accInitDef)
+void lis3dsh_init(SPI_HandleTypeDef *accSPI, lis3dsh_config *accInitDef)
 {
 	uint8_t spiData = 0;
 	
@@ -129,21 +127,21 @@ LIS3DSH_DataRaw LIS3DSH_GetDataRaw(void)
 	return tempDataRaw;
 	
 }
-//3. Get Accelerometer mg data
-LIS3DSH_DataScaled LIS3DSH_GetDataScaled(void)
+
+lis3dsh_scaledData lis3dsh_get_scaled_data(void)
 {
 	//Read raw data
 	LIS3DSH_DataRaw tempRawData = LIS3DSH_GetDataRaw();;
 	//Scale data and return 
-	LIS3DSH_DataScaled tempScaledData;
+	lis3dsh_scaledData tempScaledData;
 	tempScaledData.x = (tempRawData.x * lis3dsh_Sensitivity * __X_Scale) + 0.0f - __X_Bias;
 	tempScaledData.y = (tempRawData.y * lis3dsh_Sensitivity * __Y_Scale) + 0.0f - __Y_Bias;
 	tempScaledData.z = (tempRawData.z * lis3dsh_Sensitivity * __Z_Scale) + 0.0f - __Z_Bias;
 	
 	return tempScaledData;
 }
-//4. Poll for Data Ready
-bool LIS3DSH_PollDRDY(uint32_t msTimeout)
+
+bool lis3dsh_data_ready(uint32_t msTimeout)
 {
 	uint8_t Acc_status;
 	uint32_t startTick = HAL_GetTick();
@@ -159,7 +157,6 @@ bool LIS3DSH_PollDRDY(uint32_t msTimeout)
 		return true;
 	}
 	return false;
-	
 }
 
 //** Calibration functions **//

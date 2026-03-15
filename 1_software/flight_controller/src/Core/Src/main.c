@@ -2,16 +2,33 @@
 //#include "usb_device.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "lis3dsh.h"
 #include "lowpassfilter.h"
-#include "pinout.h"
 
+#include "main.h"
+
+lis3dsh_config memsConfig;
 SPI_HandleTypeDef hspi1;
+lis3dsh_scaledData memsScaledData;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
+
+char txData[100];
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_USART2_UART_Init(void);
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1)
+  {
+  }
+}
 
 void SystemClock_Config(void)
 {
@@ -30,7 +47,10 @@ void SystemClock_Config(void)
     RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
     RCC_OscInitStruct.PLL.PLLQ = 7;
 
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
     RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK |
                                   RCC_CLOCKTYPE_SYSCLK |
@@ -42,7 +62,10 @@ void SystemClock_Config(void)
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
     RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-    HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+    {
+        Error_Handler();
+    }
 }
 
 
@@ -95,32 +118,47 @@ static void MX_GPIO_Init(void)
     HAL_GPIO_WritePin(LIS3DSH_CS_PORT, LIS3DSH_CS_PIN, GPIO_PIN_RESET);
 }
 
+static void MX_USART2_UART_Init(void)
+{
+    huart2.Instance = USART2;
+    huart2.Init.BaudRate = 115200;
+    huart2.Init.WordLength = UART_WORDLENGTH_8B;
+    huart2.Init.StopBits = UART_STOPBITS_1;
+    huart2.Init.Parity = UART_PARITY_NONE;
+    huart2.Init.Mode = UART_MODE_TX_RX;
+    huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+    
+    HAL_UART_Init(&huart2);
+}
+
 int main(void)
 {
     HAL_Init();
     SystemClock_Config();
     MX_GPIO_Init();
     MX_SPI1_Init();
+    MX_USART2_UART_Init();
 
-    // Enable accelerometer (100 Hz, all axes)
-    //uint8_t ctrl = 0x67;
-    //uint8_t tx[2] = {LIS3DSH_CTRL_REG4, ctrl};
+    memsConfig.dataRate = LIS3DSH_DATARATE_12_5;
+    memsConfig.fullScale = LIS3DSH_FULLSCALE_4;
+    memsConfig.antiAliasingBW = LIS3DSH_FILTER_BW_50;
+    memsConfig.enableAxes = LIS3DSH_XYZ_ENABLE;
+    memsConfig.interruptEnable = false;
 
-    //LIS3DSH_Select();
-    //HAL_SPI_Transmit(&hspi1, tx, 2, HAL_MAX_DELAY);
-    //LIS3DSH_Unselect();
+    lis3dsh_init(&hspi1, &memsConfig);
 
-    //int16_t x, y, z;
-
-    while (1)
+    while(1)
     {
-        //LIS3DSH_ReadXYZ(&x, &y, &z);
+        if(lis3dsh_data_ready(1000))
+        {
+            memsScaledData = lis3dsh_get_scaled_data();
+            snprintf(txData, sizeof(txData), "[raw] x: %.2f, y: %.2f, z: %.2f\r\n", memsScaledData.x, memsScaledData.y, memsScaledData.z);
+            HAL_UART_Transmit(&huart2, (uint8_t *)txData, strlen(txData), 10);
+            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+        }
 
         // Apply low pass filtering
-
-        // Print in USB
-        HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);  // Toggle the LED (PD12)
-        HAL_Delay(500);                          // Delay for 500ms (half-second)
     }
 }
 
