@@ -1,13 +1,15 @@
 
 #include "lis3dsh.h"
 
-//SPI Chip Select
-#define _LIS3DHS_CS_ENBALE		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
-#define _LIS3DHS_CS_DISABLE		HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
+// TODO: To be removed
+//#define _LIS3DHS_CS_ENBALE		HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_RESET);
+//#define _LIS3DHS_CS_DISABLE		HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_SET);
+//static SPI_HandleTypeDef accSPI_Handle;
+//
 
 //Library variables
 //1. SPI handle
-static SPI_HandleTypeDef accSPI_Handle;
+static LIS3DSH_HandleTypeDef lis3dshHandle;
 
 //2. Sensitivity value
 static float lis3dsh_Sensitivity = LIS3DSH_SENSITIVITY_0_06G;
@@ -23,31 +25,39 @@ static float __Z_Scale = 1.0f;
 //Functions definitions
 //Private functions
 //1. Write IO
-void LIS3DSH_WriteIO(uint8_t reg, uint8_t *dataW, uint8_t size)
+void LIS3DSH_WriteReg(uint8_t reg, uint8_t *dataW, uint8_t size)
 {
 	uint8_t spiReg = reg;
 	//Enable CS
-	_LIS3DHS_CS_ENBALE;
+	//_LIS3DHS_CS_ENBALE;
+	HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_RESET);
+
 	//set register value
-	HAL_SPI_Transmit(&accSPI_Handle, &spiReg, 1, 10);
+	HAL_SPI_Transmit(/*&accSPI_Handle*/ &lis3dshHandle.spiHandler, &spiReg, 1, 10);
 	//Transmit data
-	HAL_SPI_Transmit(&accSPI_Handle, dataW, size, 10);
+	HAL_SPI_Transmit(/*&accSPI_Handle*/ &lis3dshHandle.spiHandler, dataW, size, 10);
+
 	//Disable CS
-	_LIS3DHS_CS_DISABLE;
+	//_LIS3DHS_CS_DISABLE;
+	HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_SET);
 }
 //2. Read IO
-void LIS3DSH_ReadIO(uint8_t reg, uint8_t *dataR, uint8_t size)
+void LIS3DSH_ReadReg(uint8_t reg, uint8_t *dataR, uint8_t size)
 {
 	uint8_t spiBuf[4];
 	spiBuf[0] = reg | 0x80;
+
 	//Enable CS
-	_LIS3DHS_CS_ENBALE;
+	//_LIS3DHS_CS_ENBALE;
+	HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_RESET);
 	//set register value
-	HAL_SPI_Transmit(&accSPI_Handle, spiBuf, 1, 10);
+	HAL_SPI_Transmit(/*&accSPI_Handle*/ &lis3dshHandle.spiHandler, spiBuf, 1, 10);
 	//Transmit data
-	HAL_SPI_Receive(&accSPI_Handle, spiBuf, size, 10);
+	HAL_SPI_Receive(/*&accSPI_Handle*/ &lis3dshHandle.spiHandler, spiBuf, size, 10);
+
 	//Disable CS
-	_LIS3DHS_CS_DISABLE;
+	//_LIS3DHS_CS_DISABLE;
+	HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_SET);
 	
 	for(uint8_t i=0; i<(size&0x3); i++)
 	{
@@ -55,35 +65,53 @@ void LIS3DSH_ReadIO(uint8_t reg, uint8_t *dataR, uint8_t size)
 	}
 }
 
-void lis3dsh_init(SPI_HandleTypeDef *accSPI, lis3dsh_config *accInitDef)
+void LIS3DSH_Init(LIS3DSH_HandleTypeDef *acc/*, SPI_HandleTypeDef *accSPI, LIS3DSH_InitTypeDef *accInitDef*/)
 {
 	uint8_t spiData = 0;
 	
-	memcpy(&accSPI_Handle, accSPI, sizeof(*accSPI));
+	acc->dataRaw.x = 0;
+	acc->dataRaw.y = 0;
+	acc->dataRaw.z = 0;
+
+	acc->dataScaled.x = 0.0;
+	acc->dataScaled.y = 0.0;
+	acc->dataScaled.z = 0.0;
+
+	//memcpy(&accSPI_Handle, &acc->spiHandler, sizeof(acc->spiHandler));
+	//memcpy(&accSPI_Handle, accSPI, sizeof(*accSPI));
+	memcpy(&lis3dshHandle, acc, sizeof(*acc));
+
+
 	//** 1. Enable Axes and Output Data Rate **//
 	//Set CTRL REG4 settings value
-	spiData |= (accInitDef->enableAxes & 0x07);		//Enable Axes
-	spiData |= (accInitDef->dataRate & 0xF0);			//Output Data Rate
+	//spiData |= (accInitDef->enableAxes & 0x07);		//Enable Axes
+	//spiData |= (accInitDef->dataRate & 0xF0);			//Output Data Rate
+	
+	spiData |= (acc->init.enableAxes & 0x07);		//Enable Axes
+	spiData |= (acc->init.dataRate & 0xF0);			//Output Data Rate
 	//Write to accelerometer
-	LIS3DSH_WriteIO(LIS3DSH_CTRL_REG4_ADDR, &spiData, 1);
+	LIS3DSH_WriteReg(LIS3DSH_CTRL_REG4_ADDR, &spiData, 1);
 	
 	//** 2. Full-Scale selection, Anti-aliasing BW, self test and 4-wire SPI **//
 	spiData = 0;
-	spiData |= (accInitDef->antiAliasingBW & 0xC0);		//Anti-aliasing BW
-	spiData |= (accInitDef->fullScale & 0x38);				//Full-Scale
+	//spiData |= (accInitDef->antiAliasingBW & 0xC0);		//Anti-aliasing BW
+	//spiData |= (accInitDef->fullScale & 0x38);				//Full-Scale
+	
+	spiData |= (acc->init.antiAliasingBW & 0xC0);		//Anti-aliasing BW
+	spiData |= (acc->init.fullScale & 0x38);				//Full-Scale
 	//Write to accelerometer
-	LIS3DSH_WriteIO(LIS3DSH_CTRL_REG5_ADDR, &spiData, 1);
+	LIS3DSH_WriteReg(LIS3DSH_CTRL_REG5_ADDR, &spiData, 1);
 	
 	//** 3. Interrupt Configuration **//
-	if(accInitDef->interruptEnable)
+	if(acc->init.interruptEnable /*accInitDef->interruptEnable*/)
 	{
 		spiData = 0x88;
 		//Write to accelerometer
-		LIS3DSH_WriteIO(LIS3DSH_CTRL_REG3_ADDR, &spiData, 1);
+		LIS3DSH_WriteReg(LIS3DSH_CTRL_REG3_ADDR, &spiData, 1);
 	}
 	
 	//Assign sensor sensitivity (based on Full-Scale)
-	switch(accInitDef->fullScale)
+	switch(acc->init.fullScale /*accInitDef->fullScale*/)
 	{
 		case LIS3DSH_FULLSCALE_2:
 			lis3dsh_Sensitivity = LIS3DSH_SENSITIVITY_0_06G;
@@ -105,35 +133,37 @@ void lis3dsh_init(SPI_HandleTypeDef *accSPI, lis3dsh_config *accInitDef)
 			lis3dsh_Sensitivity = LIS3DSH_SENSITIVITY_0_73G;
 			break;
 	}
-	_LIS3DHS_CS_DISABLE;
+
+	//_LIS3DHS_CS_DISABLE;
+	HAL_GPIO_WritePin(lis3dshHandle.ioBank.csPort, lis3dshHandle.ioBank.csPin, GPIO_PIN_SET);
 }
 //2. Get Accelerometer raw data
-LIS3DSH_DataRaw LIS3DSH_GetDataRaw(void)
+LIS3DSH_DataRaw LIS3DSH_GetRawData(void)
 {
 	uint8_t spiBuf[2];
 	LIS3DSH_DataRaw tempDataRaw;
 	//Read X data
-	LIS3DSH_ReadIO(LIS3DSH_OUT_X_L_ADDR, spiBuf, 2);
+	LIS3DSH_ReadReg(LIS3DSH_OUT_X_L_ADDR, spiBuf, 2);
 	tempDataRaw.x = ((spiBuf[1] << 8) + spiBuf[0]);
 	
 	//Read Y data
-	LIS3DSH_ReadIO(LIS3DSH_OUT_Y_L_ADDR, spiBuf, 2);
+	LIS3DSH_ReadReg(LIS3DSH_OUT_Y_L_ADDR, spiBuf, 2);
 	tempDataRaw.y = ((spiBuf[1] << 8) + spiBuf[0]);
 	
 	//Read Z data
-	LIS3DSH_ReadIO(LIS3DSH_OUT_Z_L_ADDR, spiBuf, 2);
+	LIS3DSH_ReadReg(LIS3DSH_OUT_Z_L_ADDR, spiBuf, 2);
 	tempDataRaw.z = ((spiBuf[1] << 8) + spiBuf[0]);
 	
 	return tempDataRaw;
 	
 }
 
-lis3dsh_scaledData lis3dsh_get_scaled_data(void)
+LIS3DSH_DataScaled LIS3DSH_GetScaledData(void)
 {
 	//Read raw data
-	LIS3DSH_DataRaw tempRawData = LIS3DSH_GetDataRaw();;
+	LIS3DSH_DataRaw tempRawData = LIS3DSH_GetRawData();
 	//Scale data and return 
-	lis3dsh_scaledData tempScaledData;
+	LIS3DSH_DataScaled tempScaledData;
 	tempScaledData.x = (tempRawData.x * lis3dsh_Sensitivity * __X_Scale) + 0.0f - __X_Bias;
 	tempScaledData.y = (tempRawData.y * lis3dsh_Sensitivity * __Y_Scale) + 0.0f - __Y_Bias;
 	tempScaledData.z = (tempRawData.z * lis3dsh_Sensitivity * __Z_Scale) + 0.0f - __Z_Bias;
@@ -141,14 +171,14 @@ lis3dsh_scaledData lis3dsh_get_scaled_data(void)
 	return tempScaledData;
 }
 
-bool lis3dsh_data_ready(uint32_t msTimeout)
+bool LIS3DSH_DataReady(uint32_t msTimeout)
 {
 	uint8_t Acc_status;
 	uint32_t startTick = HAL_GetTick();
 	do
 	{
 		//Read status register with a timeout
-		LIS3DSH_ReadIO(0x27, &Acc_status, 1);
+		LIS3DSH_ReadReg(0x27, &Acc_status, 1);
 		if(Acc_status & 0x07)break;
 		
 	}while((Acc_status & 0x07)==0 && (HAL_GetTick() - startTick) < msTimeout);
@@ -161,19 +191,19 @@ bool lis3dsh_data_ready(uint32_t msTimeout)
 
 //** Calibration functions **//
 //1. Set X-Axis calibrate
-void LIS3DSH_X_calibrate(float x_min, float x_max)
+void LIS3DSH_CalibrateXAxis(float x_min, float x_max)
 {
 	__X_Bias = (x_max+x_min)/2.0f;
 	__X_Scale = (2*1000)/(x_max - x_min);
 }
 //2. Set Y-Axis calibrate
-void LIS3DSH_Y_calibrate(float y_min, float y_max)
+void LIS3DSH_CalibrateYAxis(float y_min, float y_max)
 {
 	__Y_Bias = (y_max+y_min)/2.0f;
 	__Y_Scale = (2*1000)/(y_max - y_min);
 }
 //3. Set Z-Axis calibrate
-void LIS3DSH_Z_calibrate(float z_min, float z_max)
+void LIS3DSH_CalibrateZAxis(float z_min, float z_max)
 {
 	__Z_Bias = (z_max+z_min)/2.0f;
 	__Z_Scale = (2*1000)/(z_max - z_min);

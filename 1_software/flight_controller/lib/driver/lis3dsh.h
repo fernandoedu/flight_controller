@@ -1,3 +1,5 @@
+#ifndef __LIS3DSH_H__
+#define __LIS3DSH_H__
 
 #include "stm32f4xx_hal.h"
 
@@ -65,9 +67,14 @@ typedef struct
 	uint8_t antiAliasingBW;
 	uint8_t enableAxes;
 	bool 	interruptEnable;
-}lis3dsh_config;
+}LIS3DSH_InitTypeDef;
 
-//2. Accelerometer raw data
+typedef struct 
+{
+	GPIO_TypeDef 	*csPort;
+	uint32_t		csPin;
+}LIS3DSH_GpioTypedef;
+
 typedef struct 
 {
 	int16_t x;
@@ -80,29 +87,25 @@ typedef struct
 	float x;
 	float y;
 	float z;
-}lis3dsh_scaledData;
+}LIS3DSH_DataScaled;
 
-//Functions prototypes
-//Private functions
-//1. Write IO
-void LIS3DSH_WriteIO(uint8_t reg, uint8_t *dataW, uint8_t size);
-//2. Read IO
-void LIS3DSH_ReadIO(uint8_t reg, uint8_t *dataR, uint8_t size);
+typedef struct
+{
+	SPI_HandleTypeDef 	spiHandler;
+	LIS3DSH_GpioTypedef	ioBank;
+	LIS3DSH_InitTypeDef init;
+	LIS3DSH_DataRaw		dataRaw;
+	LIS3DSH_DataScaled	dataScaled;
+}LIS3DSH_HandleTypeDef;
 
+void LIS3DSH_WriteReg(uint8_t reg, uint8_t *dataW, uint8_t size);
+void LIS3DSH_ReadReg(uint8_t reg, uint8_t *dataR, uint8_t size);
+void LIS3DSH_Init(LIS3DSH_HandleTypeDef *acc/*, SPI_HandleTypeDef *accSPI, LIS3DSH_InitTypeDef *accInitDef*/);
+bool LIS3DSH_DataReady(uint32_t msTimeout);
+LIS3DSH_DataScaled LIS3DSH_GetScaledData(void);
+LIS3DSH_DataRaw LIS3DSH_GetRawData(void);
+void LIS3DSH_CalibrateXAxis(float x_min, float x_max);
+void LIS3DSH_CalibrateYAxis(float y_min, float y_max);
+void LIS3DSH_CalibrateZAxis(float z_min, float z_max);
 
-void lis3dsh_init(SPI_HandleTypeDef *accSPI, lis3dsh_config *accInitDef);
-bool lis3dsh_data_ready(uint32_t msTimeout);
-lis3dsh_scaledData lis3dsh_get_scaled_data(void);
-
-//2. Get Accelerometer raw data
-LIS3DSH_DataRaw LIS3DSH_GetDataRaw(void);
-
-
-
-//** Calibration functions **//
-//1. Set X-Axis calibrate
-void LIS3DSH_X_calibrate(float x_min, float x_max);
-//2. Set Y-Axis calibrate
-void LIS3DSH_Y_calibrate(float y_min, float y_max);
-//3. Set Z-Axis calibrate
-void LIS3DSH_Z_calibrate(float z_min, float z_max);
+#endif

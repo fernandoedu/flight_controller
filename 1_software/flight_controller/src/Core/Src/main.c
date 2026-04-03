@@ -1,19 +1,19 @@
 #include "stm32f4xx_hal.h"
-//#include "usb_device.h"
 
 #include <string.h>
 #include <stdio.h>
 
 #include "lis3dsh.h"
 #include "lowpassfilter.h"
-
 #include "main.h"
 
-lis3dsh_config memsConfig;
-SPI_HandleTypeDef hspi1;
-lis3dsh_scaledData memsScaledData;
-UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart2_rx;
+LIS3DSH_HandleTypeDef   lis3dsh;
+
+UART_HandleTypeDef      huart2;
+//DMA_HandleTypeDef hdma_usart2_rx;
+
+Lowpassfilter_Handle    accFiltered;
+Lowpassfilter_Data      accInput;
 
 char txData[100];
 
@@ -73,19 +73,20 @@ static void MX_SPI1_Init(void)
 {
     __HAL_RCC_SPI1_CLK_ENABLE();
 
-    hspi1.Instance = SPI1;
-    hspi1.Init.Mode = SPI_MODE_MASTER;
-    hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-    hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-    hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-    hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-    hspi1.Init.NSS = SPI_NSS_SOFT;
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-    hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-
-    HAL_SPI_Init(&hspi1);
+    
+    lis3dsh.spiHandler.Instance = SPI1;
+    lis3dsh.spiHandler.Init.Mode = SPI_MODE_MASTER;
+    lis3dsh.spiHandler.Init.Direction = SPI_DIRECTION_2LINES;
+    lis3dsh.spiHandler.Init.DataSize = SPI_DATASIZE_8BIT;
+    lis3dsh.spiHandler.Init.CLKPolarity = SPI_POLARITY_LOW;
+    lis3dsh.spiHandler.Init.CLKPhase = SPI_PHASE_1EDGE;
+    lis3dsh.spiHandler.Init.NSS = SPI_NSS_SOFT;
+    lis3dsh.spiHandler.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+    lis3dsh.spiHandler.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    lis3dsh.spiHandler.Init.TIMode = SPI_TIMODE_DISABLE;
+    lis3dsh.spiHandler.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    
+    HAL_SPI_Init(&lis3dsh.spiHandler);
 }
 
 static void MX_GPIO_Init(void)
@@ -132,6 +133,20 @@ static void MX_USART2_UART_Init(void)
     HAL_UART_Init(&huart2);
 }
 
+void mems_Init(void)
+{
+    lis3dsh.init.dataRate = LIS3DSH_DATARATE_12_5;
+    lis3dsh.init.fullScale = LIS3DSH_FULLSCALE_4;
+    lis3dsh.init.antiAliasingBW = LIS3DSH_FILTER_BW_50;
+    lis3dsh.init.enableAxes = LIS3DSH_XYZ_ENABLE;
+    lis3dsh.init.interruptEnable = false;
+
+    lis3dsh.ioBank.csPort = LIS3DSH_CS_PORT;
+    lis3dsh.ioBank.csPin = LIS3DSH_CS_PIN;
+
+    LIS3DSH_Init(&lis3dsh);
+}
+
 int main(void)
 {
     HAL_Init();
@@ -140,25 +155,25 @@ int main(void)
     MX_SPI1_Init();
     MX_USART2_UART_Init();
 
-    memsConfig.dataRate = LIS3DSH_DATARATE_12_5;
-    memsConfig.fullScale = LIS3DSH_FULLSCALE_4;
-    memsConfig.antiAliasingBW = LIS3DSH_FILTER_BW_50;
-    memsConfig.enableAxes = LIS3DSH_XYZ_ENABLE;
-    memsConfig.interruptEnable = false;
+    mems_Init();
 
-    lis3dsh_init(&hspi1, &memsConfig);
+    LowpassFilter_Init(&accFiltered, LPF_TYPE_BUTTERWORTH, LPF_ACC_CUTOFF_HZ, SAMPLE_TIME_ACC_MS);
 
     while(1)
     {
-        if(lis3dsh_data_ready(1000))
+        if(LIS3DSH_DataReady(1000))
         {
-            memsScaledData = lis3dsh_get_scaled_data();
-            snprintf(txData, sizeof(txData), "[raw] x: %.2f, y: %.2f, z: %.2f\r\n", memsScaledData.x, memsScaledData.y, memsScaledData.z);
+            lis3dsh.dataScaled = LIS3DSH_GetScaledData();
+            snprintf(txData, sizeof(txData), "[raw] x: %.2f, y: %.2f, z: %.2f\r\n", lis3dsh.dataScaled.x, lis3dsh.dataScaled.y, lis3dsh.dataScaled.z);
             HAL_UART_Transmit(&huart2, (uint8_t *)txData, strlen(txData), 10);
+
+            //float accFilt[3];
+		    //for (int n = 0; n < 3; n++) {
+		    //    accFilt[n] = LowpassFilter_Update(&lpfAcc[n], lis3dsh.dataScaled.x);
+		    //}
+
             HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
         }
-
-        // Apply low pass filtering
     }
 }
 
